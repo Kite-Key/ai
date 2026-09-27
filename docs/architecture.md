@@ -42,4 +42,17 @@ flowchart LR
     C --> D["Provider SDK / database / webhooks / audio"]
 ```
 
-There are no references from either package to Delphinium, Entity Framework, Azure, or Twilio. `RequiredToolCall` carries SDK-neutral call details; provider adapters translate their SDK types at the boundary. Delphinium's browser audio adapter depends on application-specific transcript and stream types, so audio and Twilio remain outside these packages.
+## Voice transport
+
+```mermaid
+flowchart LR
+    Voice["Voice provider adapter"] --> Interface["IHumanAudioClient"]
+    Interface --> Neutral["ConversationTranscriptMessage (neutral)"]
+    Neutral --> Mapper["App-owned transcript mapping"]
+    Mapper --> App["Delphinium transcript model / UI / persistence"]
+    Interface --> Transport["App-owned WebSocket or phone transport"]
+```
+
+`IHumanAudioClient` and its transcript payload reside in Abstractions. The app implements the transport and translates neutral transcript fields into its own DTO; no persistence type crosses into the package. Voice adapters use `SendAudio(byte[])`, converting provider-specific binary wrappers at their edge. Browser audio and Twilio implementations remain in the app.
+
+There are no references from either package to Delphinium, Entity Framework, Azure, or Twilio. `RequiredToolCall` carries SDK-neutral call details; provider adapters translate their SDK types at the boundary.

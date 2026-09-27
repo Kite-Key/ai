@@ -4,7 +4,7 @@ Small, provider-neutral .NET 8 libraries extracted from Delphinium's AI service.
 
 | Package | Responsibility |
 | --- | --- |
-| `KiteKey.AI.Abstractions` | Tool dispatch, chat output, and text-processing contracts; no NuGet dependencies |
+| `KiteKey.AI.Abstractions` | Tool dispatch, chat output, text-processing and voice transport contracts; no NuGet dependencies |
 | `KiteKey.AI` | JSON handler base and named tool executor; depends on Abstractions and Microsoft.Extensions.Logging.Abstractions |
 
 Install `KiteKey.AI` to implement and dispatch tools; install just `KiteKey.AI.Abstractions` for contracts. Neither package registers a model provider or makes network calls.
@@ -43,8 +43,30 @@ Pass an optional `Func<string, string, CancellationToken, Task<string?>>` as the
 | `Functions.FunctionHandlerBase<TArgs,TOutput>` | `KiteKey.AI.Functions.FunctionHandlerBase<TArgs,TOutput>` |
 | `Models.Chats.IChatClient` | `KiteKey.AI.Abstractions.Chats.IChatClient` |
 | `LanguageProcessing.IGptAgent`, `ISummarizer`, `ITextClassifier` | `KiteKey.AI.Abstractions.LanguageProcessing` |
+| `Models.Voice.IHumanAudioClient` and `Data.Shared.Models.AudioProcessing.ConversationTranscriptMessage` | `KiteKey.AI.Abstractions.Voice` |
 
-Namespaces and executor constructor signatures change: update imports and register `IFunctionExecutor` against `FunctionExecutor` with your `IEnumerable<IFunctionHandler>`. The signatures of `IFunctionHandler`, `IFunctionExecutor`, `RequiredToolCall`, and `FunctionHandlerBase<TArgs,TOutput>` remain source-compatible after namespace changes. Delphinium's handler base used to turn every exception (including cancellation) into `{"message":"..."}` and returned `"Not found"` on null results; the new base propagates exceptions and rejects null results. Contextual dispatch likewise rejects malformed JSON instead of silently forwarding it. Consumers should handle these errors at their transport boundary. A former webhook implementation can be explicitly adapted through the optional fallback callback. Existing Delphinium entity-backed function definitions, Azure assistants/voice integrations, native app-specific functions, and Twilio are **not** included. The browser socket audio class also uses Delphinium's `ChannelStream` and transcript DTO, so it is deferred rather than importing app-domain dependencies. See [architecture](docs/architecture.md).
+Namespaces and executor constructor signatures change: update imports and register `IFunctionExecutor` against `FunctionExecutor` with your `IEnumerable<IFunctionHandler>`. The signatures of `IFunctionHandler`, `IFunctionExecutor`, `RequiredToolCall`, and `FunctionHandlerBase<TArgs,TOutput>` remain source-compatible after namespace changes. Delphinium's handler base used to turn every exception (including cancellation) into `{"message":"..."}` and returned `"Not found"` on null results; the new base propagates exceptions and rejects null results. Contextual dispatch likewise rejects malformed JSON instead of silently forwarding it. Consumers should handle these errors at their transport boundary. A former webhook implementation can be explicitly adapted through the optional fallback callback. Existing Delphinium entity-backed function definitions, Azure assistants/voice integrations, native app-specific functions, and Twilio are **not** included. The browser socket audio class remains deferred; its `ChannelStream` and app event handling are not shared. See [architecture](docs/architecture.md).
+
+### Audio transport boundary
+
+`IHumanAudioClient` retains the Delphinium transport control methods, speaking state, conversation ID and `StreamClosed` event, but `SendTranscriptAsync` accepts the package's own `ConversationTranscriptMessage` instead of the Delphinium data model. The former `SendAudio(BinaryData)` overload is omitted to avoid requiring `System.Memory.Data`; provider adapters can call `SendAudio(binaryData.ToArray())`. In a Delphinium audio adapter, map the neutral transcript to the existing application DTO at the boundary:
+
+```csharp
+public Task SendTranscriptAsync(KiteKey.AI.Abstractions.Voice.ConversationTranscriptMessage entry)
+    => SendToApplicationAsync(new Delphinium.Data.Shared.Models.AudioProcessing.ConversationTranscriptMessage
+    {
+        MessageId = entry.MessageId,
+        Speaker = entry.Speaker,
+        Text = entry.Text,
+        IsFinal = entry.IsFinal,
+        Timestamp = entry.Timestamp,
+        ToolName = entry.ToolName,
+        ToolArguments = entry.ToolArguments,
+        ToolOutput = entry.ToolOutput
+    });
+```
+
+The example is a mapping inside a consumer-owned adapter; `SendToApplicationAsync` represents that application's existing transcript sink. No Delphinium type is referenced by either NuGet package.
 
 ## Build and release
 
