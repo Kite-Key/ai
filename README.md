@@ -70,6 +70,8 @@ The example is a mapping inside a consumer-owned adapter; `SendToApplicationAsyn
 
 ## Build and release
 
-Run `dotnet test KiteKey.AI.sln -c Release`, then `dotnet pack KiteKey.AI.sln -c Release --no-build -o artifacts`. CI runs both on PRs and main. To release, update both project versions, merge to main, then push a matching `vX.Y.Z` tag. The [release workflow](.github/workflows/release.yml) checks tag/version agreement, tests and packs, then uses NuGet trusted publishing (OIDC) to publish both packages.
+Version `0.1.0` of [KiteKey.AI](https://www.nuget.org/packages/KiteKey.AI/0.1.0) and [KiteKey.AI.Abstractions](https://www.nuget.org/packages/KiteKey.AI.Abstractions/0.1.0) was published to NuGet.org under the KiteKey organization; both uploads returned `201 Created`.
 
-Before the first release, add a **KiteKey NuGet organization** trusted publishing policy for GitHub owner `Kite-Key`, repository `ai`, workflow `release.yml` (no environment), and grant its NuGet account permission to publish `KiteKey.AI*`. Set repository variable `NUGET_USERNAME` to the NuGet.org **username** whose organization membership and policy can publish; no permanent API key is needed. Package ownership and policy setup are external prerequisites.
+Run `dotnet test KiteKey.AI.sln -c Release`, then `dotnet pack KiteKey.AI.sln -c Release --no-build -o artifacts`. CI runs both on PRs and main. For a future release, update both project versions, merge to main, then push a matching `vX.Y.Z` tag. The [release workflow](.github/workflows/release.yml) checks tag/version agreement, tests and packs, then uses NuGet trusted publishing (OIDC) to publish both packages.
+
+The KiteKey organization owns trusted publishing policies scoped to the **exact** package IDs `KiteKey.AI` and `KiteKey.AI.Abstractions` for GitHub owner `Kite-Key`, repository `ai`, workflow file `release.yml` (no environment). The repository variable `NUGET_USERNAME` is `taylorchasewhite`: `NuGet/login` requires the NuGet.org **policy creator's username**, not the KiteKey organization owner name. No permanent API key is used.
