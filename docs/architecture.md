@@ -46,13 +46,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Voice["Voice provider adapter"] --> Interface["IHumanAudioClient"]
-    Interface --> Neutral["ConversationTranscriptMessage (neutral)"]
+    Voice["Voice provider adapter"] --> Interface["IVoiceAudioClient"]
+    Interface --> Neutral["VoiceTranscript + optional VoiceToolCall"]
     Neutral --> Mapper["App-owned transcript mapping"]
     Mapper --> App["Delphinium transcript model / UI / persistence"]
     Interface --> Transport["App-owned WebSocket or phone transport"]
 ```
 
-`IHumanAudioClient` and its transcript payload reside in Abstractions. The app implements the transport and translates neutral transcript fields into its own DTO; no persistence type crosses into the package. Voice adapters use `SendAudio(byte[])`, converting provider-specific binary wrappers at their edge. Browser audio and Twilio implementations remain in the app.
+`IVoiceAudioClient` and its transcript payload reside in Abstractions. The app implements the transport and translates the neutral transcript and optional tool-call details into its own DTO; no persistence type crosses into the package. Voice adapters use `SendAudioAsync(byte[], cancellation)`, converting provider-specific binary wrappers at their edge. Browser audio and Twilio implementations remain in the app.
 
 There are no references from either package to Delphinium, Entity Framework, Azure, or Twilio. `RequiredToolCall` carries SDK-neutral call details; provider adapters translate their SDK types at the boundary.
