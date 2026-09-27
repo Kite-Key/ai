@@ -26,21 +26,38 @@ public class FunctionHandlerBaseTests
     }
 
     [Fact]
-    public async Task InvalidJsonProducesErrorResult()
+    public async Task InvalidJsonThrows()
     {
         IFunctionHandler handler = new EchoHandler();
-        string output = await handler.Process("{oops", CancellationToken.None);
-        Assert.True(JsonSerializer.Deserialize<Dictionary<string, string>>(output)!.ContainsKey("message"));
+        await Assert.ThrowsAsync<JsonException>(() => handler.Process("{oops", CancellationToken.None));
     }
 
     [Fact]
-    public async Task HandlerFailureProducesJsonError()
+    public async Task HandlerFailurePropagates()
     {
         IFunctionHandler handler = new FailingHandler();
 
-        string output = await handler.Process("""{"message":"hello"}""", CancellationToken.None);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.Process("""{"message":"hello"}""", CancellationToken.None));
+        Assert.Equal("failed", exception.Message);
+    }
 
-        Assert.Equal("failed", JsonSerializer.Deserialize<Dictionary<string, string>>(output)!["message"]);
+    [Fact]
+    public async Task CancellationIsNotConvertedToToolOutput()
+    {
+        IFunctionHandler handler = new CancelledHandler();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => handler.Process("""{"message":"hello"}""", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task NullOutputIsRejected()
+    {
+        IFunctionHandler handler = new NullOutputHandler();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.Process("""{"message":"hello"}""", CancellationToken.None));
     }
 
     [Fact]
@@ -68,5 +85,19 @@ public class FunctionHandlerBaseTests
         public override string Name => "fail";
         public override Task<Output> ProcessCore(Input args, CancellationToken cancellation)
             => throw new InvalidOperationException("failed");
+    }
+
+    private sealed class CancelledHandler() : FunctionHandlerBase<Input, Output>(NullLogger.Instance)
+    {
+        public override string Name => "cancel";
+        public override Task<Output> ProcessCore(Input args, CancellationToken cancellation)
+            => throw new OperationCanceledException();
+    }
+
+    private sealed class NullOutputHandler() : FunctionHandlerBase<Input, Output>(NullLogger.Instance)
+    {
+        public override string Name => "null-output";
+        public override Task<Output> ProcessCore(Input args, CancellationToken cancellation)
+            => Task.FromResult<Output>(null!);
     }
 }

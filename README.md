@@ -31,7 +31,7 @@ IFunctionExecutor executor = new FunctionExecutor([new WeatherHandler(NullLogger
 string? json = await executor.TryProcessFunctionCallAsync("weather", """{"city":"Boston"}""", CancellationToken.None);
 ```
 
-Pass an optional `Func<string, string, CancellationToken, Task<string?>>` as the executor's second argument to dispatch unknown tools elsewhere. Without one, unknown tools return `null`; there is **no mandatory webhook**. The contextual overload fills missing or placeholder JSON string arguments with trusted channel context; malformed JSON is passed to the handler unchanged. Duplicate handler names throw. Handler JSON failures are returned as `{"message":"..."}`; the typed/object overloads propagate failures.
+Pass an optional `Func<string, string, CancellationToken, Task<string?>>` as the executor's second argument to dispatch unknown tools elsewhere. Without one, unknown tools return `null`; there is **no mandatory webhook**. The contextual overload fills missing or placeholder JSON string arguments with trusted channel context. Duplicate handler names throw. Malformed contextual JSON and handler failures propagate exceptions rather than returning success-shaped error JSON.
 
 ## Migration from Delphinium
 
@@ -44,7 +44,7 @@ Pass an optional `Func<string, string, CancellationToken, Task<string?>>` as the
 | `Models.Chats.IChatClient` | `KiteKey.AI.Abstractions.Chats.IChatClient` |
 | `LanguageProcessing.IGptAgent`, `ISummarizer`, `ITextClassifier` | `KiteKey.AI.Abstractions.LanguageProcessing` |
 
-Namespaces and constructor signatures change: update imports and register `IFunctionExecutor` against `FunctionExecutor` with your `IEnumerable<IFunctionHandler>`. A former webhook implementation can be explicitly adapted through the optional fallback callback. Existing Delphinium entity-backed function definitions, Azure assistants/voice integrations, native app-specific functions, and Twilio are **not** included. The browser socket audio class also uses Delphinium's `ChannelStream` and transcript DTO, so it is deferred rather than importing app-domain dependencies. See [architecture](docs/architecture.md).
+Namespaces and executor constructor signatures change: update imports and register `IFunctionExecutor` against `FunctionExecutor` with your `IEnumerable<IFunctionHandler>`. The signatures of `IFunctionHandler`, `IFunctionExecutor`, `RequiredToolCall`, and `FunctionHandlerBase<TArgs,TOutput>` remain source-compatible after namespace changes. Delphinium's handler base used to turn every exception (including cancellation) into `{"message":"..."}` and returned `"Not found"` on null results; the new base propagates exceptions and rejects null results. Contextual dispatch likewise rejects malformed JSON instead of silently forwarding it. Consumers should handle these errors at their transport boundary. A former webhook implementation can be explicitly adapted through the optional fallback callback. Existing Delphinium entity-backed function definitions, Azure assistants/voice integrations, native app-specific functions, and Twilio are **not** included. The browser socket audio class also uses Delphinium's `ChannelStream` and transcript DTO, so it is deferred rather than importing app-domain dependencies. See [architecture](docs/architecture.md).
 
 ## Build and release
 

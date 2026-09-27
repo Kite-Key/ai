@@ -17,34 +17,27 @@ public abstract class FunctionHandlerBase<TArgs, TOutput>(ILogger logger) : IFun
 
     public async Task<string> Process(string args, CancellationToken cancellation)
     {
-        try
-        {
-            TArgs? input = string.IsNullOrEmpty(args)
-                ? null
-                : JsonSerializer.Deserialize<TArgs>(args, _jsonSerializerOptions)
-                    ?? throw new IOException("Failed to deserialize request");
+        TArgs? input = string.IsNullOrEmpty(args)
+            ? null
+            : JsonSerializer.Deserialize<TArgs>(args, _jsonSerializerOptions)
+                ?? throw new JsonException("Function arguments cannot be JSON null.");
 
-            Logger.LogInformation("Processing function {FunctionName} with argument type {Type}", Name, typeof(TArgs));
-            TOutput? output = input is not null
-                ? await ProcessCore(input, cancellation).ConfigureAwait(false)
-                : await Process().ConfigureAwait(false);
+        Logger.LogInformation("Processing function {FunctionName} with argument type {Type}", Name, typeof(TArgs));
+        TOutput output = input is not null
+            ? await ProcessCore(input, cancellation).ConfigureAwait(false)
+            : await Process().ConfigureAwait(false);
 
-            return output is null
-                ? JsonSerializer.Serialize(new FailedOperation("Not found"), _jsonSerializerOptions)
-                : JsonSerializer.Serialize(output, _jsonSerializerOptions);
-        }
-        catch (Exception e)
-        {
-            Logger.LogInformation(e, "An error occurred while processing function {FunctionName}", Name);
-            return JsonSerializer.Serialize(new FailedOperation(e.Message), _jsonSerializerOptions);
-        }
+        return JsonSerializer.Serialize(
+            output ?? throw new InvalidOperationException($"Function {Name} returned a null result."),
+            _jsonSerializerOptions);
     }
 
     public async Task<TOutput> Process(TArgs args, CancellationToken cancellation)
     {
+        ArgumentNullException.ThrowIfNull(args);
         Logger.LogInformation("Processing function {FunctionName}", Name);
         TOutput output = await ProcessCore(args, cancellation).ConfigureAwait(false);
-        return output;
+        return output ?? throw new InvalidOperationException($"Function {Name} returned a null result.");
     }
 
     public async Task<object> Process(object args, CancellationToken cancellation)
@@ -60,5 +53,4 @@ public abstract class FunctionHandlerBase<TArgs, TOutput>(ILogger logger) : IFun
 
     protected virtual Task<TOutput> Process() => throw new NotImplementedException();
 
-    private record FailedOperation(string Message);
 }

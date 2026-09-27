@@ -18,25 +18,27 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Call["Function name + JSON + optional context"] --> Merge["Fill absent/placeholder string arguments"]
-    Merge --> Find{"Exactly one native handler?"}
+    Call["Function name + JSON + optional context"] --> Merge{"Valid contextual JSON?"}
+    Merge -- "no" --> Error["Throw JSON exception"]
+    Merge -- "yes" --> Fill["Fill absent/placeholder string arguments"]
+    Fill --> Find{"Exactly one native handler?"}
     Find -- "yes" --> Deserialize["Deserialize typed arguments"]
     Deserialize --> Invoke["ProcessCore; serialize JSON output"]
     Find -- "no match" --> Fallback{"Optional callback?"}
     Fallback -- "yes" --> External["Call consumer integration"]
     Fallback -- "no" --> Missing["Return null"]
-    Find -- "duplicate" --> Error["Throw InvalidOperationException"]
+    Find -- "duplicate" --> Duplicate["Throw InvalidOperationException"]
 ```
 
-The contextual overload retains Delphinium's placeholder handling and malformed-JSON passthrough. JSON handlers return a serialized `message` error on failures; typed calls propagate errors. A consumer decides whether to expose exception messages to its users.
+The contextual overload retains Delphinium's placeholder handling but rejects malformed or null JSON instead of silently forwarding it. JSON and typed handler calls propagate exceptions, including cancellation; null results throw. Consumers decide how to communicate errors to their users at the transport boundary.
 
 ## Boundaries
 
 ```mermaid
 flowchart LR
-    A["KiteKey.AI.Abstractions"] --> B["KiteKey.AI"]
-    L["Microsoft.Extensions.Logging.Abstractions"] --> B
-    B --> C["Consumer application"]
+    C["Consumer application"] --> B["KiteKey.AI"]
+    B --> A["KiteKey.AI.Abstractions"]
+    B --> L["Microsoft.Extensions.Logging.Abstractions"]
     C --> D["Provider SDK / database / webhooks / audio"]
 ```
 

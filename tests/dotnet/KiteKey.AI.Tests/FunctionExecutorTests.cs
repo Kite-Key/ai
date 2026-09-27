@@ -57,16 +57,25 @@ public class FunctionExecutorTests
     }
 
     [Fact]
-    public async Task MalformedArgumentsPassThroughUntouched()
+    public async Task MalformedContextualArgumentsFailExplicitly()
     {
         var handler = new StubHandler("lookup");
         var executor = new FunctionExecutor([handler]);
 
-        await executor.TryProcessFunctionCallAsync(
+        await Assert.ThrowsAsync<JsonException>(() => executor.TryProcessFunctionCallAsync(
             "lookup", "{invalid", new Dictionary<string, string?> { ["tenantId"] = "tenant" },
-            CancellationToken.None);
+            CancellationToken.None));
 
-        Assert.Equal("{invalid", handler.Arguments);
+        Assert.Null(handler.Arguments);
+    }
+
+    [Fact]
+    public async Task NullContextualArgumentsFailExplicitly()
+    {
+        var executor = new FunctionExecutor([new StubHandler("lookup")]);
+
+        await Assert.ThrowsAsync<JsonException>(() => executor.TryProcessFunctionCallAsync(
+            "lookup", "null", new Dictionary<string, string?>(), CancellationToken.None));
     }
 
     [Fact]

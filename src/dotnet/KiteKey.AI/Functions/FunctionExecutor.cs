@@ -32,17 +32,10 @@ public sealed class FunctionExecutor(
     private static string MergeContext(string arguments, IReadOnlyDictionary<string, string?> context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        Dictionary<string, string?> payload;
-        try
-        {
-            payload = string.IsNullOrWhiteSpace(arguments)
-                ? []
-                : JsonSerializer.Deserialize<Dictionary<string, string?>>(arguments, SerializerOptions) ?? [];
-        }
-        catch (JsonException)
-        {
-            return arguments;
-        }
+        Dictionary<string, string?> payload = string.IsNullOrWhiteSpace(arguments)
+            ? []
+            : JsonSerializer.Deserialize<Dictionary<string, string?>>(arguments, SerializerOptions)
+                ?? throw new JsonException("Function arguments must be a JSON object.");
 
         foreach ((string key, string? value) in context)
         {
