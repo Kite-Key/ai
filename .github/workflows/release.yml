@@ -1,0 +1,45 @@
+name: Release NuGet
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.repository == 'Kite-Key/ai'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Check version and username
+        shell: bash
+        env:
+          NUGET_USERNAME: ${{ vars.NUGET_USERNAME }}
+        run: |
+          test -n "$NUGET_USERNAME" || { echo "Set NUGET_USERNAME repository variable"; exit 1; }
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "Release tag must point to main HEAD"; exit 1; }
+          version="${GITHUB_REF_NAME#v}"
+          for project in src/dotnet/KiteKey.AI.Abstractions/KiteKey.AI.Abstractions.csproj src/dotnet/KiteKey.AI/KiteKey.AI.csproj; do
+            grep -Fq "<Version>${version}</Version>" "$project" || { echo "Tag does not match $project"; exit 1; }
+          done
+      - run: dotnet test KiteKey.AI.sln --configuration Release
+      - run: dotnet pack KiteKey.AI.sln --configuration Release --no-build --output artifacts
+      - name: NuGet OIDC login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ vars.NUGET_USERNAME }}
+      - name: Publish
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push 'artifacts/*.nupkg' --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"

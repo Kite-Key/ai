@@ -1,0 +1,53 @@
+# KiteKey.AI
+
+Small, provider-neutral .NET 8 libraries extracted from Delphinium's AI service. MIT licensed.
+
+| Package | Responsibility |
+| --- | --- |
+| `KiteKey.AI.Abstractions` | Tool dispatch, chat output, and text-processing contracts; no NuGet dependencies |
+| `KiteKey.AI` | JSON handler base and named tool executor; depends on Abstractions and Microsoft.Extensions.Logging.Abstractions |
+
+Install `KiteKey.AI` to implement and dispatch tools; install just `KiteKey.AI.Abstractions` for contracts. Neither package registers a model provider or makes network calls.
+
+```csharp
+using KiteKey.AI.Abstractions.Functions;
+using KiteKey.AI.Functions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+public sealed record WeatherArgs(string City);
+public sealed record WeatherResult(string Forecast);
+
+public sealed class WeatherHandler(ILogger<WeatherHandler> logger)
+    : FunctionHandlerBase<WeatherArgs, WeatherResult>(logger)
+{
+    public override string Name => "weather";
+
+    public override Task<WeatherResult> ProcessCore(WeatherArgs args, CancellationToken cancellation)
+        => Task.FromResult(new WeatherResult($"Weather for {args.City}"));
+}
+
+IFunctionExecutor executor = new FunctionExecutor([new WeatherHandler(NullLogger<WeatherHandler>.Instance)]);
+string? json = await executor.TryProcessFunctionCallAsync("weather", """{"city":"Boston"}""", CancellationToken.None);
+```
+
+Pass an optional `Func<string, string, CancellationToken, Task<string?>>` as the executor's second argument to dispatch unknown tools elsewhere. Without one, unknown tools return `null`; there is **no mandatory webhook**. The contextual overload fills missing or placeholder JSON string arguments with trusted channel context; malformed JSON is passed to the handler unchanged. Duplicate handler names throw. Handler JSON failures are returned as `{"message":"..."}`; the typed/object overloads propagate failures.
+
+## Migration from Delphinium
+
+| Delphinium source | New type |
+| --- | --- |
+| `Models.Functions.IFunctionHandler`, `RequiredToolCall` | `KiteKey.AI.Abstractions.Functions` |
+| `Assistants.IFunctionExecutor` | `KiteKey.AI.Abstractions.Functions.IFunctionExecutor` |
+| `Assistants.FunctionExecutor` | `KiteKey.AI.Functions.FunctionExecutor` |
+| `Functions.FunctionHandlerBase<TArgs,TOutput>` | `KiteKey.AI.Functions.FunctionHandlerBase<TArgs,TOutput>` |
+| `Models.Chats.IChatClient` | `KiteKey.AI.Abstractions.Chats.IChatClient` |
+| `LanguageProcessing.IGptAgent`, `ISummarizer`, `ITextClassifier` | `KiteKey.AI.Abstractions.LanguageProcessing` |
+
+Namespaces and constructor signatures change: update imports and register `IFunctionExecutor` against `FunctionExecutor` with your `IEnumerable<IFunctionHandler>`. A former webhook implementation can be explicitly adapted through the optional fallback callback. Existing Delphinium entity-backed function definitions, Azure assistants/voice integrations, native app-specific functions, and Twilio are **not** included. The browser socket audio class also uses Delphinium's `ChannelStream` and transcript DTO, so it is deferred rather than importing app-domain dependencies. See [architecture](docs/architecture.md).
+
+## Build and release
+
+Run `dotnet test KiteKey.AI.sln -c Release`, then `dotnet pack KiteKey.AI.sln -c Release --no-build -o artifacts`. CI runs both on PRs and main. To release, update both project versions, merge to main, then push a matching `vX.Y.Z` tag. The [release workflow](.github/workflows/release.yml) checks tag/version agreement, tests and packs, then uses NuGet trusted publishing (OIDC) to publish both packages.
+
+Before the first release, add a **KiteKey NuGet organization** trusted publishing policy for GitHub owner `Kite-Key`, repository `ai`, workflow `release.yml` (no environment), and grant its NuGet account permission to publish `KiteKey.AI*`. Set repository variable `NUGET_USERNAME` to the NuGet.org **username** whose organization membership and policy can publish; no permanent API key is needed. Package ownership and policy setup are external prerequisites.
